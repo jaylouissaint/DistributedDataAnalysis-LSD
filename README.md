@@ -40,184 +40,134 @@ delays = spark.read.csv(
 
 ## Pipeline Overview
 ### Part 1: Cleaning + Exploratory Analytics
+**Notebook**: load_prepare_data.ipynb
 
-Notebook: load_prepare_data.ipynb
+Tasks Performed:
 
-Casts columns from strings to appropriate Spark types (dates, ints).
+- Casts columns from strings to appropriate Spark types (dates, ints).
+- Converts hhmm time fields into “minutes since midnight.”
+- Fills null delay-type fields with 0.
+- Saves cleaned data to the metastore:
 
-Converts hhmm time fields into “minutes since midnight.”
+Saved table:
+`lsd_2026.default.polyhymnia_cleaned_airline`
 
-Fills null delay-type fields with 0.
 
-Saves cleaned data to the metastore:
+**Exploratory Analysis**
 
-lsd_2026.default.polyhymnia_cleaned_airline
+Notebook: `aggregate_calculations.ipynb`
 
-Notebook: aggregate_calculations.ipynb
 Produces required analytics outputs:
 
-Flights per month across the full time range
+- Flights per month across the full time range
+- Weekly delay percentage time series
+- Weekly delay counts by delay type
+- Carrier performance summary table
+- Top 50 airports by delay percentage
 
-Weekly delay percentage time series
+### Part 2: Feature Engineering
 
-Weekly delay counts by delay type
+**Notebook**: `feature_engineering.ipynb`
 
-Carrier performance summary table
-
-Top 50 airports by delay percentage
-
-Part 2: Feature Engineering
-
-Notebook: feature_engineering.ipynb
 Adds predictive features and saves the augmented table:
+`lsd_2026.default.polyhymnia_feature_engineered`
 
-lsd_2026.default.polyhymnia_feature_engineered
+**Required features**:
 
-Required features:
+- day_of_week
+- rate_weather_delay_dep (origin weather delay rate in previous hour)
+- rate_weather_delay_arr (destination weather delay rate in previous hour)
+- dep_traffic_z_score (airport traffic z-score vs historical baseline)
 
-day_of_week
-
-rate_weather_delay_dep (origin weather delay rate in previous hour)
-
-rate_weather_delay_arr (destination weather delay rate in previous hour)
-
-dep_traffic_z_score (airport traffic z-score vs historical baseline)
-
-Additional engineered features:
-
-carrier_delay_rate_7d (carrier historical delay rate over trailing 7 days)
-
-route_delay_rate_7d (route historical delay rate over trailing 7 days)
-
-crs_dep_time_bucket, arr_time_bucket (time-of-day buckets)
+**Additional engineered features**:
+- carrier_delay_rate_7d (carrier historical delay rate over trailing 7 days)
+- route_delay_rate_7d (route historical delay rate over trailing 7 days)
+- crs_dep_time_bucket, arr_time_bucket (time-of-day buckets)
 
 These features introduce time dependence, so model evaluation uses time-aware splits.
 
-Part 3: Delay Prediction (Spark ML)
+### Part 3: Delay Prediction (Spark ML)
 
-We train multiple models using the engineered feature table. The notebooks emphasize:
-
-Avoiding leakage by fitting preprocessing on train only
-
-Efficient splitting and caching for large datasets
-
-Comparing against a baseline model (always predict “no delay”)
+We train multiple models using the engineered feature table. The notebooks emphasize avoiding leakage by fitting preprocessing on train only,efficient splitting and caching for large datasets, and comparing against a baseline model (always predict “no delay”)
 
 Notebooks:
+`Delay_Prediction_Random_Forest.ipynb`
 
-delay_prediction_Random_forest.ipynb
+`Delay_Prediction_Decision_Tree.ipynb`
 
-delay_prediction_decision_tree.ipynb
+`Delay_Prediction_SVM.ipynb`
 
-Delay_prediction_SVM.ipynb
-
-Split strategy
+#### Split strategy
 
 We use chronological splits because of rolling features. Two approaches appear in the project:
 
-Date-based split: fixed date cutoffs (e.g., train before 2015, test 2015–2016, validate 2017+)
+- Date-based split: fixed date cutoffs (e.g., train before 2015, test 2015–2016, validate 2017+)
 
-Quantile-based time split: uses an approximate percentile split on a combined timestamp column (FL_DATE + CRS_DEP_TIME) via approxQuantile to create an ~60/20/20 split without global sorting.
+- Quantile-based time split: uses an approximate percentile split on a combined timestamp column (FL_DATE + CRS_DEP_TIME) via approx Quantile to create an ~60/20/20 split without global sorting.
 
-Models
+#### Models
 
 Random Forest and Decision Tree for non-linear interactions and robustness.
 
 LinearSVC (SVM) for a strong linear margin-based classifier (with feature scaling).
 
-Results Highlight (SVM)
-
-Using the quantile-based split, the dataset was split into:
-
-Train: 37,232,160 rows
-
-Test: 11,436,737 rows
-
-Validation: 12,888,067 rows
-
-Hyperparameter tuning on a 10% training sample selected:
-
-regParam = 0.01
-
-maxIter = 20
-
-Validation performance (LinearSVC vs baseline):
-
-Accuracy: 0.6763 vs 0.6403
-
-TPR/Recall: 0.3908 vs 0.0000
-
-FPR: 0.1634 vs 0.0000
-
-Specificity: 0.8366 vs 1.0000
-
-Interpretation: the SVM is much more useful than the baseline because it catches a substantial portion of delayed flights, but this comes with a tradeoff of more false alarms.
-
-Installation / Requirements
+### Installation / Requirements
 
 Runs in Databricks/Spark environment with:
 
-PySpark (Spark SQL + Spark ML)
+- PySpark (Spark SQL + Spark ML)
+- pandas, matplotlib (for reporting tables/plots)
 
-pandas, matplotlib (for reporting tables/plots)
-
-No local installation is required if using the course Databricks workspace.
-
-Usage
+### Usage
 
 Run Part 1 cleaning to create the cleaned metastore table:
 
-lsd_2026.default.polyhymnia_cleaned_airline
+`lsd_2026.default.polyhymnia_cleaned_airline`
 
 Run Part 2 feature engineering to create the feature table:
 
-lsd_2026.default.polyhymnia_feature_engineered
+`lsd_2026.default.polyhymnia_feature_engineered`
 
 Run Part 3 modeling notebooks to train and evaluate models:
 
-Random Forest / Decision Tree / SVM notebooks
+`Random Forest / Decision Tree / SVM notebooks`
 
-File Structure
-Part 1 — Cleaning and Reporting
+### File Structure
+#### Part 1 — Cleaning and Reporting
 
-load_prepare_data.ipynb
+`load_prepare_data.ipynb`
 Loads raw CSV data, casts types, fixes nulls, and writes cleaned Spark table.
 
-aggregate_calculations.ipynb
+`aggregate_calculations.ipynb`
 Produces required exploratory aggregates and plots.
 
-Part 2 — Feature Engineering
+#### Part 2 — Feature Engineering
 
-feature_engineering.ipynb
+`feature_engineering.ipynb`
 Creates rolling and categorical features and writes feature-engineered Spark table.
 
-Part 3 — Modeling
+#### Part 3 — Modeling
 
-delay_prediction_Random_forest.ipynb
+`delay_prediction_Random_forest.ipynb`
 Random Forest training, tuning, evaluation vs baseline.
 
-delay_prediction_decision_tree.ipynb
+`delay_prediction_decision_tree.ipynb`
 Decision Tree / Random Forest variants with scaling pipeline.
 
-Delay_prediction_SVM.ipynb
+`Delay_prediction_SVM.ipynb`
 Linear SVM with StandardScaler, quantile-based split, evaluation vs baseline.
 
-Notes on Evaluation
+### Notes on Evaluation
 
 We report:
-
-Accuracy
-
-Confusion matrix
-
-True Positive Rate (Recall/Sensitivity)
-
-False Positive Rate
-
-Specificity
+- Accuracy
+- Confusion matrix
+- True Positive Rate (Recall/Sensitivity)
+- False Positive Rate
+- Specificity
 
 We also compare every model to a baseline that always predicts “no delay” to show the added value of machine learning beyond class imbalance.
 
-Data Source
+### Data Source
 
 U.S. airline on-time performance dataset provided via the course cluster in Azure Data Lake Storage (lsdsampledata2026), spanning 2009–2018.
